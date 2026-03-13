@@ -3,6 +3,7 @@ import axios from "axios";
 import { useForm } from "react-hook-form";
 import { RotatingLines } from "react-loader-spinner";
 import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
 import * as bootstrap from "bootstrap";
 import "bootstrap/dist/css/bootstrap.min.css";
 
@@ -12,10 +13,15 @@ const API_PATH = import.meta.env.VITE_API_PATH;
 function Checkout() {
   const [cart, setCart] = useState(null);
   const [products, setProducts] = useState([]);
-  const [product, setProduct] = useState({});
+  const [product, setProduct] = useState(null);
   const [loadingCartId, setLoadingCartId] = useState(null);
   const [loadingProductId, setLoadingProductsId] = useState(null);
+  const [modalQty, setModalQty] = useState(1);
+
   const productModalRef = useRef(null);
+  const checkoutRef = useRef(null); // 用來捲到結帳區
+
+  const navigate = useNavigate();
 
   const {
     register,
@@ -54,68 +60,74 @@ function Checkout() {
     }
   };
 
-  // 首次載入
+  // 第一次載入就打 API
   useEffect(() => {
-    getProducts();
-    getCart();
-
-    const modalEl = document.querySelector("#productModal");
-    if (modalEl) {
-      productModalRef.current = new bootstrap.Modal(modalEl);
-      modalEl.addEventListener("hide.bs.modal", () => {
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
-      });
-    }
+    const initializeCheckout = async () => {
+      await getCart();
+      await getProducts();
+    };
+    initializeCheckout();
   }, []);
 
-  if (!cart) {
-    return (
-      <div className="container mt-5">
-        <h2>結帳</h2>
-        <p>載入中或尚無購物車資料...</p>
-      </div>
-    );
-  }
-
-  // 查看更多（載入單一產品 + 開 modal）
-  const handleView = async (id) => {
-    try {
-      setLoadingProductsId(id);
-      const res = await axios.get(
-        `${API_BASE}/api/${API_PATH}/product/${id}`
-      );
-      setProduct(res.data.product);
-      setLoadingProductsId(null);
-      productModalRef.current?.show();
-    } catch (error) {
-      setLoadingProductsId(null);
-      toast.error("載入產品失敗");
+  // 專門負責初始化 Bootstrap Modal
+  useEffect(() => {
+    const modalElement = document.getElementById("productModal");
+    if (!modalElement) {
+      console.error("找不到 #productModal");
+      return;
     }
-  };
+
+    productModalRef.current = new bootstrap.Modal(modalElement, {
+      keyboard: false,
+    });
+
+    const handleHide = () => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    };
+
+    modalElement.addEventListener("hide.bs.modal", handleHide);
+
+    return () => {
+      modalElement.removeEventListener("hide.bs.modal", handleHide);
+      productModalRef.current?.dispose?.();
+    };
+  }, []);
 
   // 加入購物車
-  const addCart = async (productId) => {
-    try {
-      setLoadingCartId(productId);
-      const data = {
-        product_id: productId,
-        qty: 1,
-      };
-      await axios.post(
-        `${API_BASE}/api/${API_PATH}/cart`,
-        { data }
-      );
-      toast.success("已加入購物車");
-      setLoadingCartId(null);
-      getCart();
-    } catch (error) {
-      setLoadingCartId(null);
-      toast.error("加入購物車失敗");
-    }
-  };
+const addCart = async (productId, qty = 1) => {
+  try {
+    setLoadingCartId(productId);
+    const data = {
+      product_id: productId,
+      qty,
+    };
+    await axios.post(
+      `${API_BASE}/api/${API_PATH}/cart`,
+      { data }
+    );
+    toast.success("已加入購物車");
+    setLoadingCartId(null);
+    await getCart();
 
+    // 如果是從查看更多的 Modal 來的，關閉 Modal
+    if (productModalRef.current) {
+      productModalRef.current.hide();
+    }
+
+    // 成功後捲動到結帳區
+    checkoutRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  } catch (error) {
+    setLoadingCartId(null);
+    toast.error("加入購物車失敗", error.response?.data || error);
+  };
+};
+
+  
   // 更新購物車數量
   const updateCart = async (cartId, productId, qty = 1) => {
     try {
@@ -123,11 +135,13 @@ function Checkout() {
         product_id: productId,
         qty,
       };
-      const response = await axios.put(
+
+      await axios.put(
         `${API_BASE}/api/${API_PATH}/cart/${cartId}`,
         { data }
       );
-      setCart(response.data.data);
+
+      await getCart();
     } catch (error) {
       console.log(error.response?.data || error);
       toast.error("更新購物車失敗");
@@ -165,21 +179,35 @@ function Checkout() {
 
   // 送出訂單
   const onSubmit = async (formData) => {
+    if (!cart?.carts || cart.carts.length === 0) {
+      toast.error("購物車是空的，不能送出訂單喔！");
+      return;
+    }
+
+    const { message = "", ...user } = formData;
+
+    const payload = {
+      data: {
+        user: user,
+        message: message,
+      },
+    };
+
     try {
-      const data = {
-        user: formData,
-        message: formData.message,
-      };
-      await axios.post(
+      const res = await axios.post(
         `${API_BASE}/api/${API_PATH}/order`,
-        { data }
+        payload
       );
-      toast.success("訂單建立成功！");
-      reset();
-      await getCart();
+
+      if (res.data.success) {
+        toast.success("訂單建立成功！");
+        reset();
+        getCart();
+        alert(`訂單編號：${res.data.orderId}\n感謝您的購買！`);
+      }
     } catch (error) {
-      console.error("建立訂單失敗:", error);
-      toast.error("建立訂單失敗，請稍後再試");
+      console.error("API 回傳錯誤細節:", error.response?.data);
+      toast.error(error.response?.data?.message || "建立訂單失敗");
     }
   };
 
@@ -192,7 +220,7 @@ function Checkout() {
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">
-                  產品名稱：{product.title}
+                  產品名稱：{product?.title}
                 </h5>
                 <button
                   type="button"
@@ -202,24 +230,71 @@ function Checkout() {
                 ></button>
               </div>
               <div className="modal-body">
-                <img
-                  className="w-100"
-                  src={product.imageUrl}
-                  alt={product.title}
-                />
-                <p className="mt-3">產品內容：{product.content}</p>
-                <p>產品描述：{product.description}</p>
-                <p>
-                  價錢：
-                  <del>原價 ${product.origin_price}</del>，特價：
-                  ${product.price}
-                </p>
+                {product && (
+                  <>
+                    <img
+                      className="w-100"
+                      src={product.imageUrl}
+                      alt={product.title}
+                    />
+                    <p className="mt-3">產品內容：{product.content}</p>
+                    <p>產品描述：{product.description}</p>
+                    <p>
+                      價錢：
+                      <del>原價 ${product.origin_price}</del>，特價：
+                      ${product.price}
+                    </p>
+
+                    {/* 數量調整區 */}
+                    <div className="d-flex align-items-center mt-3">
+                      <label style={{ width: "80px" }} className="me-2">
+                        數量：
+                      </label>
+                      <div className="input-group" style={{ maxWidth: "220px" }}>
+                        <button
+                          className="btn btn-outline-secondary"
+                          type="button"
+                          onClick={() =>
+                            setModalQty((prev) => Math.max(1, prev - 1))
+                          }
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          className="form-control text-center"
+                          min="1"
+                          max="10"
+                          value={modalQty}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            if (!Number.isNaN(value)) {
+                              setModalQty(
+                                Math.min(10, Math.max(1, value))
+                              );
+                            }
+                          }}
+                        />
+                        <button
+                          className="btn btn-outline-secondary"
+                          type="button"
+                          onClick={() =>
+                            setModalQty((prev) => Math.min(10, prev + 1))
+                          }
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="modal-footer">
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={() => addCart(product.id)}
+                  onClick={() => product && addCart(product.id, modalQty)}
+                  disabled={!product}
                 >
                   加入購物車
                 </button>
@@ -261,7 +336,11 @@ function Checkout() {
                     <button
                       type="button"
                       className="btn btn-outline-secondary"
-                      onClick={() => handleView(p.id)}
+                      onClick={() => {
+                        setProduct(p);
+                        setModalQty(1);
+                        productModalRef.current?.show();
+                      }}
                       disabled={loadingProductId === p.id}
                     >
                       {loadingProductId === p.id ? (
@@ -289,7 +368,7 @@ function Checkout() {
                           color="grey"
                         />
                       ) : (
-                        "加到購物車"
+                        "加入購物車"
                       )}
                     </button>
                   </div>
@@ -300,7 +379,9 @@ function Checkout() {
         </table>
 
         {/* 購物車列表 */}
-        <h2 className="mt-5">結帳</h2>
+        <h2 className="mt-5" ref={checkoutRef}>
+          結帳
+        </h2>
         <div className="text-end mt-4">
           <button
             type="button"
@@ -337,7 +418,7 @@ function Checkout() {
                     <input
                       type="number"
                       className="form-control"
-                      defaultValue={cartItem.qty}
+                      value={cartItem.qty}
                       min={1}
                       onChange={(e) =>
                         updateCart(
@@ -362,7 +443,7 @@ function Checkout() {
           <tfoot>
             <tr>
               <td className="text-end" colSpan="3">
-                總計${cart.final_total}
+                總計${cart?.final_total ?? 0}
               </td>
               <td className="text-end"></td>
             </tr>
@@ -371,7 +452,7 @@ function Checkout() {
       </div>
 
       {/* 訂購人表單 */}
-      <div className="my-5 row justify-content-center">
+       <div className="my-5 row justify-content-center">
         <form className="col-md-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="mb-3">
             <label htmlFor="email" className="form-label">
@@ -496,7 +577,9 @@ function Checkout() {
             </button>
           </div>
         </form>
+        <singleProductModal product={product} />
       </div>
+    
     </>
   );
 }
