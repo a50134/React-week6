@@ -585,3 +585,4 @@ const addCart = async (productId, qty = 1) => {
 }
 
 export default Checkout;
+//
