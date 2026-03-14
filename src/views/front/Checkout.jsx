@@ -19,7 +19,7 @@ function Checkout() {
   const [modalQty, setModalQty] = useState(1);
 
   const productModalRef = useRef(null);
-  const checkoutRef = useRef(null); // 用來捲到結帳區
+  const checkoutRef = useRef(null);
 
   const navigate = useNavigate();
 
@@ -32,7 +32,6 @@ function Checkout() {
     mode: "onChange",
   });
 
-  // 抓購物車
   const getCart = async () => {
     try {
       const res = await axios.get(`${API_BASE}/api/${API_PATH}/cart`);
@@ -47,20 +46,19 @@ function Checkout() {
     }
   };
 
-  // 抓產品列表
   const getProducts = async () => {
     try {
       const response = await axios.get(
         `${API_BASE}/api/${API_PATH}/products`
       );
-      setProducts(response.data.products);
+      setProducts(response.data.products || []);
     } catch (error) {
       console.error("Error fetching products:", error);
       toast.error("產品列表載入失敗");
+      setProducts([]);
     }
   };
 
-  // 第一次載入就打 API
   useEffect(() => {
     const initializeCheckout = async () => {
       await getCart();
@@ -69,7 +67,6 @@ function Checkout() {
     initializeCheckout();
   }, []);
 
-  // 專門負責初始化 Bootstrap Modal
   useEffect(() => {
     const modalElement = document.getElementById("productModal");
     if (!modalElement) {
@@ -91,49 +88,49 @@ function Checkout() {
 
     return () => {
       modalElement.removeEventListener("hide.bs.modal", handleHide);
-      productModalRef.current?.dispose?.();
+      if (productModalRef.current && typeof productModalRef.current.dispose === "function") {
+        productModalRef.current.dispose();
+      }
     };
   }, []);
 
-  // 加入購物車
-const addCart = async (productId, qty = 1) => {
-  try {
-    setLoadingCartId(productId);
-    const data = {
-      product_id: productId,
-      qty,
-    };
-    await axios.post(
-      `${API_BASE}/api/${API_PATH}/cart`,
-      { data }
-    );
-    toast.success("已加入購物車");
-    setLoadingCartId(null);
-    await getCart();
+  const addCart = async (productId, qty = 1) => {
+    try {
+      setLoadingCartId(productId);
+      const data = {
+        product_id: productId,
+        qty: qty,
+      };
+      await axios.post(
+        `${API_BASE}/api/${API_PATH}/cart`,
+        { data }
+      );
+      toast.success("已加入購物車");
+      setLoadingCartId(null);
+      await getCart();
 
-    // 如果是從查看更多的 Modal 來的，關閉 Modal
-    if (productModalRef.current) {
-      productModalRef.current.hide();
+      if (productModalRef.current) {
+        productModalRef.current.hide();
+      }
+
+      if (checkoutRef.current) {
+        checkoutRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    } catch (error) {
+      setLoadingCartId(null);
+      toast.error("加入購物車失敗");
+      console.error(error.response?.data || error);
     }
-
-    // 成功後捲動到結帳區
-    checkoutRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  } catch (error) {
-    setLoadingCartId(null);
-    toast.error("加入購物車失敗", error.response?.data || error);
   };
-};
 
-  
-  // 更新購物車數量
   const updateCart = async (cartId, productId, qty = 1) => {
     try {
       const data = {
         product_id: productId,
-        qty,
+        qty: qty,
       };
 
       await axios.put(
@@ -148,7 +145,6 @@ const addCart = async (productId, qty = 1) => {
     }
   };
 
-  // 刪除購物車項目
   const deleteCart = async (cartId) => {
     try {
       const response = await axios.delete(
@@ -163,7 +159,6 @@ const addCart = async (productId, qty = 1) => {
     }
   };
 
-  // 清空購物車
   const clearCart = async () => {
     try {
       const res = await axios.delete(
@@ -177,7 +172,6 @@ const addCart = async (productId, qty = 1) => {
     }
   };
 
-  // 送出訂單
   const onSubmit = async (formData) => {
     if (!cart?.carts || cart.carts.length === 0) {
       toast.error("購物車是空的，不能送出訂單喔！");
@@ -245,7 +239,6 @@ const addCart = async (productId, qty = 1) => {
                       ${product.price}
                     </p>
 
-                    {/* 數量調整區 */}
                     <div className="d-flex align-items-center mt-3">
                       <label style={{ width: "80px" }} className="me-2">
                         數量：
@@ -314,67 +307,77 @@ const addCart = async (productId, qty = 1) => {
             </tr>
           </thead>
           <tbody>
-            {products.map((p) => (
-              <tr key={p.id}>
-                <td style={{ width: "200px" }}>
-                  <div
-                    style={{
-                      height: "100px",
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                      backgroundImage: `url(${p.imageUrl})`,
-                    }}
-                  ></div>
-                </td>
-                <td>{p.title}</td>
-                <td>
-                  <del className="h6">原價：${p.origin_price}</del>
-                  <div className="h5">特價：${p.price}</div>
-                </td>
-                <td>
-                  <div className="btn-group btn-group-sm">
-                    <button
-                      type="button"
-                      className="btn btn-outline-secondary"
-                      onClick={() => {
-                        setProduct(p);
-                        setModalQty(1);
-                        productModalRef.current?.show();
+            {Array.isArray(products) && products.length > 0 ? (
+              products.map((p) => (
+                <tr key={p.id}>
+                  <td style={{ width: "200px" }}>
+                    <div
+                      style={{
+                        height: "100px",
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                        backgroundImage: `url(${p.imageUrl})`,
                       }}
-                      disabled={loadingProductId === p.id}
-                    >
-                      {loadingProductId === p.id ? (
-                        <RotatingLines
-                          visible={true}
-                          height={16}
-                          width={80}
-                          color="grey"
-                        />
-                      ) : (
-                        "查看更多"
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-outline-danger"
-                      onClick={() => addCart(p.id)}
-                      disabled={loadingCartId === p.id}
-                    >
-                      {loadingCartId === p.id ? (
-                        <RotatingLines
-                          visible={true}
-                          height={16}
-                          width={80}
-                          color="grey"
-                        />
-                      ) : (
-                        "加入購物車"
-                      )}
-                    </button>
-                  </div>
+                    ></div>
+                  </td>
+                  <td>{p.title}</td>
+                  <td>
+                    <del className="h6">原價：${p.origin_price}</del>
+                    <div className="h5">特價：${p.price}</div>
+                  </td>
+                  <td>
+                    <div className="btn-group btn-group-sm">
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => {
+                          setProduct(p);
+                          setModalQty(1);
+                          if (productModalRef.current) {
+                            productModalRef.current.show();
+                          }
+                        }}
+                        disabled={loadingProductId === p.id}
+                      >
+                        {loadingProductId === p.id ? (
+                          <RotatingLines
+                            visible={true}
+                            height={16}
+                            width={80}
+                            color="grey"
+                          />
+                        ) : (
+                          "查看更多"
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger"
+                        onClick={() => addCart(p.id)}
+                        disabled={loadingCartId === p.id}
+                      >
+                        {loadingCartId === p.id ? (
+                          <RotatingLines
+                            visible={true}
+                            height={16}
+                            width={80}
+                            color="grey"
+                          />
+                        ) : (
+                          "加入購物車"
+                        )}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="4" className="text-center">
+                  目前沒有商品
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
 
@@ -452,7 +455,7 @@ const addCart = async (productId, qty = 1) => {
       </div>
 
       {/* 訂購人表單 */}
-       <div className="my-5 row justify-content-center">
+      <div className="my-5 row justify-content-center">
         <form className="col-md-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="mb-3">
             <label htmlFor="email" className="form-label">
@@ -577,12 +580,10 @@ const addCart = async (productId, qty = 1) => {
             </button>
           </div>
         </form>
-        <singleProductModal product={product} />
+        {/* singleProductModal 拿掉，因為你已經在上面用 Bootstrap Modal 實作完了 */}
       </div>
-    
     </>
   );
 }
 
 export default Checkout;
-//
