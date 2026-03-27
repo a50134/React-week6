@@ -8,7 +8,7 @@ function AdminLayout() {
           <Link className="h4 mt-5 mx-2" to="/admin/product">
             後臺產品頁面
           </Link>
-          <Link className="h4 mt-5 mx-2" to="/admin/product">
+          <Link className="h4 mt-5 mx-2" to="/admin/order">
             後臺訂單頁面
           </Link>
         </nav>

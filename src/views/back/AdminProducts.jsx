@@ -1,285 +1,293 @@
-import { useEffect, useRef, useState } from "react";
+// src/views/back/AdminProducts.jsx
+import { useEffect, useState } from "react";
 import axios from "axios";
-import * as bootstrap from "bootstrap";
-import Pagination from "../../components/Pagination";
 import ProductModal from "../../components/ProductModal";
+import Toasts from "../../components/Toasts";
+import { useDispatch, useSelector } from "react-redux";
+import { createMessage, removeMessage } from "../../slice/messageSlice";
 
-// API 設定
 const API_BASE = import.meta.env.VITE_API_BASE;
 const API_PATH = import.meta.env.VITE_API_PATH;
 
-const INITIAL_TEMPLATE_DATA = {
-  id: "",
-  title: "",
-  category: "",
-  origin_price: "",
-  price: "",
-  unit: "",
-  description: "",
-  content: "",
-  is_enabled: false,
-  imageUrl: "",
-  imagesUrl: [],
-};
-
 function AdminProducts() {
-  // 表單資料狀態(儲存登入表單輸入)
-  const [formData, setFormData] = useState({
-    username: "",
-    password: "",
-  });
-  // 登入狀態管理(控制顯示登入或產品頁）
-  const [isAuth, setIsAuth] = useState(false);
   const [products, setProducts] = useState([]);
-  const [templateProduct, setTemplateProduct] = useState(INITIAL_TEMPLATE_DATA);
-  const [modalType, setModalType] = useState("");
-  const [pagination, setPagination] = useState({});
-  const productModalRef = useRef(null);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((preData) => ({
-      ...preData, // 保留原有屬性
-      [name]: value, // 更新特定屬性
-    }));
+  // Modal 狀態
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalType, setModalType] = useState("create"); // create / edit / delete
+  const [templateProduct, setTemplateProduct] = useState({
+    title: "",
+    category: "",
+    origin_price: 0,
+    price: 0,
+    is_enabled: 0,
+    unit: "件",
+    imageUrl: "",
+    imagesUrl: [],
+    description: "",
+    content: "",
+  });
+
+  // Redux
+  const dispatch = useDispatch();
+  const messages = useSelector((state) => state.message);
+
+  const showToast = (success, message) => {
+    const id = Date.now();
+
+    dispatch(
+      createMessage({
+        id,
+        success,
+        message,
+      }),
+    );
+
+    // 3 秒後自動關閉這則訊息
+    setTimeout(() => {
+      dispatch(removeMessage(id));
+    }, 3000);
   };
+
+  // 取得產品列表
+  const getProducts = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/${API_PATH}/admin/products`);
+      const productsData = Array.isArray(res.data.products)
+        ? res.data.products
+        : Object.values(res.data.products || {});
+      setProducts(productsData);
+      console.log("後台產品資料：", productsData);
+    } catch (error) {
+      console.error("取得後台產品失敗：", error?.response || error);
+      showToast(false, "取得產品失敗，請確認是否登入或 API 設定是否正確");
+    }
+  };
+
+  // 檢查登入
+  const checkLogin = async () => {
+    try {
+      const token = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("hexToken="))
+        ?.split("=")[1];
+
+      if (!token) {
+        showToast(false, "尚未登入或 token 不存在，請先回登入頁重新登入");
+        return;
+      }
+
+      axios.defaults.headers.common["Authorization"] = token;
+      await axios.post(`${API_BASE}/api/user/check`);
+      await getProducts();
+    } catch (error) {
+      console.error("登入狀態檢查失敗:", error?.response || error);
+      showToast(false, "登入驗證失敗（401），請回登入頁重新登入");
+    }
+  };
+
+  useEffect(() => {
+    checkLogin();
+  }, []);
+
+  // 開「新增產品」的 Modal
+  const handleOpenCreateModal = () => {
+    setModalType("create");
+    setTemplateProduct({
+      title: "",
+      category: "",
+      origin_price: 0,
+      price: 0,
+      is_enabled: 0,
+      unit: "件",
+      imageUrl: "",
+      imagesUrl: [],
+      description: "",
+      content: "",
+    });
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+  };
+
+  // Modal 裡 input / textarea 共用的 onChange
   const handleModalInputChange = (e) => {
-    const { name, value, checked, type } = e.target;
-    setTemplateProduct((preData) => ({
-      ...preData,
+    const { name, type, checked, value } = e.target;
+    setTemplateProduct((prev) => ({
+      ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
   };
 
-  const handleModalImageChange = (index, value) => {
-    setTemplateProduct((pre) => {
-      const newImage = [...pre.imagesUrl];
-      newImage[index] = value;
+  const handleModalImageChange = (index, url) => {
+    setTemplateProduct((prev) => {
+      const images = Array.isArray(prev.imagesUrl) ? [...prev.imagesUrl] : [];
+      images[index] = url;
       return {
-        ...pre,
-        imagesUrl: newImage,
+        ...prev,
+        imagesUrl: images,
       };
     });
   };
 
   const handleAddImage = () => {
-    setTemplateProduct((pre) => {
-      const newImage = [...pre.imagesUrl];
-      newImage.push("");
-      return {
-        ...pre,
-        imagesUrl: newImage,
-      };
-    });
+    setTemplateProduct((prev) => ({
+      ...prev,
+      imagesUrl: [...(prev.imagesUrl || []), ""],
+    }));
   };
 
   const handleRemoveImage = () => {
-    setTemplateProduct((pre) => {
-      const newImage = [...pre.imagesUrl];
-      newImage.pop();
+    setTemplateProduct((prev) => {
+      const images = Array.isArray(prev.imagesUrl) ? [...prev.imagesUrl] : [];
+      images.pop();
       return {
-        ...pre,
-        imagesUrl: newImage,
+        ...prev,
+        imagesUrl: images,
       };
     });
   };
 
-  const getProducts = async (page = 1) => {
-    try {
-      const response = await axios.get(
-        `${API_BASE}/api/${API_PATH}/admin/products?page=${page}`,
-      );
-      console.log("產品資料：", response.data);
-      setProducts(response.data.products);
-      setPagination(response.data.pagination);
-    } catch (error) {
-      console.error("取得產品失敗：", error);
-    }
+  const uploadImage = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    console.log("選擇的檔案：", file);
+    // 之後再串上傳圖片 API
   };
 
-  const updateProduct = async (id) => {
-    let url = `${API_BASE}/api/${API_PATH}/admin/product`;
-    let method = "post";
-
-    if (modalType === "edit") {
-      url = `${API_BASE}/api/${API_PATH}/admin/product/${id}`;
-      method = "put";
-    }
-    const productData = {
-      data: {
-        ...templateProduct,
-        origin_price: Number(templateProduct.origin_price),
-        price: Number(templateProduct.price),
-        is_enabled: templateProduct.is_enabled ? 1 : 0,
-        imagesUrl: [...templateProduct.imagesUrl.filter((url) => url !== "")],
-      },
-    };
+  const updateProduct = async () => {
     try {
-      const response = await axios[method](url, productData);
-      console.log(response.data);
-      getProducts();
+      const payload = {
+        data: {
+          ...templateProduct,
+          origin_price: Number(templateProduct.origin_price) || 0,
+          price: Number(templateProduct.price) || 0,
+          is_enabled: templateProduct.is_enabled ? 1 : 0,
+        },
+      };
+
+      if (modalType === "edit" && templateProduct.id) {
+        await axios.put(
+          `${API_BASE}/api/${API_PATH}/admin/product/${templateProduct.id}`,
+          payload,
+        );
+        showToast(true, "更新產品成功");
+      } else {
+        await axios.post(`${API_BASE}/api/${API_PATH}/admin/product`, payload);
+        showToast(true, "新增產品成功");
+      }
+
       closeModal();
+      await getProducts();
     } catch (error) {
-      console.log(error.response);
+      console.error("儲存產品失敗：", error?.response || error);
+      showToast(false, "儲存產品失敗，請確認欄位與 API 設定");
     }
   };
 
   const deleteProduct = async (id) => {
     try {
-      const response = await axios.delete(
-        `${API_BASE}/api/${API_PATH}/admin/product/${id}`,
-      );
-      console.log(response.data);
-      getProducts();
+      await axios.delete(`${API_BASE}/api/${API_PATH}/admin/product/${id}`);
+      showToast(true, "刪除產品成功");
       closeModal();
-    } catch (error) {
-      console.log(error.response);
-    }
-  };
-  const uploadImage = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) {
-      return;
-    }
-    try {
-      const formData = new FormData();
-      formData.append("file-to-upload", file);
-      const response = await axios.post(
-        `${API_BASE}/api/${API_PATH}/admin/upload`,
-        formData,
-      );
-      setTemplateProduct((pre) => ({
-        ...pre,
-        imagesUrl: response.data.imageUrl,
-      }));
-    } catch (error) {
-      console.log(error.response);
-    }
-  };
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await axios.post(`${API_BASE}/admin/signin`, formData);
-      const { token, expired } = response.data;
-      document.cookie = `hexToken=${token};expires=${new Date(expired)};`;
-      axios.defaults.headers.common["Authorization"] = token;
       await getProducts();
-      setIsAuth(true);
     } catch (error) {
-      console.error("登入失敗:", error);
-      setIsAuth(false);
+      console.error("刪除產品失敗：", error?.response || error);
+      showToast(false, "刪除產品失敗");
     }
-  };
-
-  useEffect(() => {
-    const token = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("hexToken="))
-      ?.split("=")[1];
-    if (token) {
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-    }
-    productModalRef.current = new bootstrap.Modal("#productModal", {
-      keyboard: false,
-    });
-
-    const checkLogin = async () => {
-      try {
-        const response = await axios.post(`${API_BASE}/api/user/check`);
-        console.log(response.data);
-        setIsAuth(true);
-        getProducts();
-      } catch (error) {
-        console.error("登入失敗:", error);
-      }
-    };
-
-    checkLogin();
-  }, []);
-
-  const openModal = (type, product) => {
-    setModalType(type);
-    setTemplateProduct((pre) => ({
-      ...pre,
-      ...product,
-    }));
-
-    productModalRef.current.show();
-  };
-  const closeModal = () => {
-    productModalRef.current.hide();
   };
 
   return (
     <>
       <div className="container">
-        <h1>產品列表</h1>
-        <div className="text-end mt-4">
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => openModal("create", INITIAL_TEMPLATE_DATA)}
-          >
-            建立新的產品
-          </button>
-        </div>
+        <h1 className="my-3">產品列表</h1>
+
+        <button
+          className="btn btn-primary mb-3"
+          type="button"
+          onClick={handleOpenCreateModal}
+        >
+          建立新的產品
+        </button>
+
         <table className="table">
           <thead>
             <tr>
-              <th scope="col">分類</th>
-              <th scope="col">產品名稱</th>
-              <th scope="col">原價</th>
-              <th scope="col">售價</th>
-              <th scope="col">是否啟用</th>
-              <th scope="col">編輯</th>
+              <th>分類</th>
+              <th>產品名稱</th>
+              <th>原價</th>
+              <th>售價</th>
+              <th>是否啟用</th>
+              <th>編輯</th>
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => {
-              return (
-                <tr key={product.id}>
-                  <td>{product.category}</td>
-                  <th scope="row">{product.title}</th>
-                  <td>{product.origin_price}</td>
-                  <td>{product.price}</td>
-                  <td className={`${product.is_enabled && "text-success"}`}>
-                    {product.is_enabled ? "啟用" : "不啟用"}
-                  </td>
-                  <td>
-                    <div
-                      className="btn-group"
-                      role="group"
-                      aria-label="Basic example"
-                    >
-                      <button
-                        type="button"
-                        className="btn btn-outline-primary btn-sm"
-                        onClick={() => openModal("edit", product)}
-                      >
-                        編輯
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-outline-danger btn-sm"
-                        onClick={() => openModal("delete", product)}
-                      >
-                        刪除
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+            {products.map((item) => (
+              <tr key={item.id}>
+                <td>{item.category}</td>
+                <td>{item.title}</td>
+                <td>{item.origin_price}</td>
+                <td>{item.price}</td>
+                <td>{item.is_enabled ? "啟用" : "未啟用"}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-sm me-2"
+                    onClick={() => {
+                      setModalType("edit");
+                      setTemplateProduct({
+                        ...item,
+                        imagesUrl: item.imagesUrl || [],
+                      });
+                      setIsModalOpen(true);
+                    }}
+                  >
+                    編輯
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-danger btn-sm"
+                    onClick={() => {
+                      setModalType("delete");
+                      setTemplateProduct(item);
+                      setIsModalOpen(true);
+                    }}
+                  >
+                    刪除
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {products.length === 0 && (
+              <tr>
+                <td colSpan="6" className="text-center">
+                  尚無產品資料
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-        <Pagination Pagination={pagination} onChangePage={getProducts} />
+
+        <ProductModal
+          isOpen={isModalOpen}
+          modalType={modalType}
+          templateProduct={templateProduct}
+          handleModalInputChange={handleModalInputChange}
+          handleModalImageChange={handleModalImageChange}
+          handleAddImage={handleAddImage}
+          handleRemoveImage={handleRemoveImage}
+          updateProduct={updateProduct}
+          deleteProduct={deleteProduct}
+          uploadImage={uploadImage}
+          closeModal={closeModal}
+        />
       </div>
 
-      <ProductModal
-        modalType={modalType}
-        templateProduct={templateProduct}
-        getProducts={getProducts}
-        closeModal={closeModal}
+      <Toasts
+        messages={messages}
+        removeMessage={(id) => dispatch(removeMessage(id))}
       />
     </>
   );

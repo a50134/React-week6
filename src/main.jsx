@@ -1,14 +1,12 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
+// main.jsx
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import App from "./App";
+import { ToastProvider } from "./hooks/useToast";
+import "bootstrap/dist/css/bootstrap.min.css"; // 若尚未引入 Bootstrap，就加這行
 
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap/dist/js/bootstrap.bundle.min.js';
-
-
-import App from './App.jsx'
-
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <ToastProvider>
     <App />
-  </StrictMode>,
-)
+  </ToastProvider>,
+);

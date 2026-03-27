@@ -3,6 +3,7 @@ import axios from "axios";
 import "../../assets/style.css";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
+import { useToast } from "../../hooks/useToast";
 
 // API 設定
 const API_BASE = import.meta.env.VITE_API_BASE;
@@ -13,7 +14,7 @@ function Login() {
   const [isAuth, setIsAuth] = useState(false);
   const [products, setProducts] = useState([]);
   const [tempProduct, setTempProduct] = useState(null);
-
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   // react-hook-form 設定
@@ -71,7 +72,7 @@ function Login() {
         ?.split("=")[1];
 
       if (!token) {
-        console.error("沒有找到 token，請重新登入");
+        toast.error("沒有找到 token，請重新登入");
         setIsAuth(false);
         return;
       }
@@ -79,8 +80,9 @@ function Login() {
       axios.defaults.headers.common["Authorization"] = token;
       await axios.post(`${API_BASE}/api/user/check`);
       setIsAuth(true);
+      toast.success("登入成功", { loading: true });
     } catch (error) {
-      console.error("登入狀態檢查失敗:", error);
+      toast.error("登入失敗", error);
       setIsAuth(false);
     }
   };

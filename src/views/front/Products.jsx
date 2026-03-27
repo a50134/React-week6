@@ -13,9 +13,8 @@ function Products() {
     const getProducts = async () => {
       try {
         const response = await axios.get(
-          `${API_BASE}/api/${API_PATH}/products`
+          `${API_BASE}/api/${API_PATH}/products`,
         );
-        // 保險：確保一定是陣列
         const productList = response.data?.products;
         if (Array.isArray(productList)) {
           setProducts(productList);
@@ -26,6 +25,7 @@ function Products() {
       } catch (error) {
         console.error("Error fetching products:", error);
         setProducts([]);
+        console.error("取得商品失敗，請稍後再試");
       }
     };
 
@@ -69,9 +69,7 @@ function Products() {
             </div>
           ))
         ) : (
-          <div className="col-12 text-center py-5">
-            目前沒有商品可顯示
-          </div>
+          <div className="col-12 text-center py-5">目前沒有商品可顯示</div>
         )}
       </div>
     </div>

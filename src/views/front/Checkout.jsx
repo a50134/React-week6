@@ -6,6 +6,7 @@ import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import * as bootstrap from "bootstrap";
 import "bootstrap/dist/css/bootstrap.min.css";
+import { useToast } from "../../hooks/useToast";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const API_PATH = import.meta.env.VITE_API_PATH;
@@ -17,7 +18,7 @@ function Checkout() {
   const [loadingCartId, setLoadingCartId] = useState(null);
   const [loadingProductId, setLoadingProductsId] = useState(null);
   const [modalQty, setModalQty] = useState(1);
-
+  const { toast } = useToast();
   const productModalRef = useRef(null);
   const checkoutRef = useRef(null);
 
@@ -41,20 +42,18 @@ function Checkout() {
       toast.error(
         Array.isArray(messages)
           ? messages.join(", ")
-          : messages || "購物車載入失敗"
+          : messages || "購物車載入失敗",
       );
     }
   };
 
   const getProducts = async () => {
     try {
-      const response = await axios.get(
-        `${API_BASE}/api/${API_PATH}/products`
-      );
+      const response = await axios.get(`${API_BASE}/api/${API_PATH}/products`);
       setProducts(response.data.products || []);
     } catch (error) {
       console.error("Error fetching products:", error);
-      toast.error("產品列表載入失敗");
+
       setProducts([]);
     }
   };
@@ -88,7 +87,10 @@ function Checkout() {
 
     return () => {
       modalElement.removeEventListener("hide.bs.modal", handleHide);
-      if (productModalRef.current && typeof productModalRef.current.dispose === "function") {
+      if (
+        productModalRef.current &&
+        typeof productModalRef.current.dispose === "function"
+      ) {
         productModalRef.current.dispose();
       }
     };
@@ -101,10 +103,7 @@ function Checkout() {
         product_id: productId,
         qty: qty,
       };
-      await axios.post(
-        `${API_BASE}/api/${API_PATH}/cart`,
-        { data }
-      );
+      await axios.post(`${API_BASE}/api/${API_PATH}/cart`, { data });
       toast.success("已加入購物車");
       setLoadingCartId(null);
       await getCart();
@@ -133,10 +132,7 @@ function Checkout() {
         qty: qty,
       };
 
-      await axios.put(
-        `${API_BASE}/api/${API_PATH}/cart/${cartId}`,
-        { data }
-      );
+      await axios.put(`${API_BASE}/api/${API_PATH}/cart/${cartId}`, { data });
 
       await getCart();
     } catch (error) {
@@ -149,7 +145,7 @@ function Checkout() {
     try {
       const response = await axios.delete(
         `${API_BASE}/api/${API_PATH}/cart/${cartId}`,
-        { data: { id: cartId } }
+        { data: { id: cartId } },
       );
       setCart(response.data.data);
       toast.success("已刪除品項");
@@ -161,9 +157,7 @@ function Checkout() {
 
   const clearCart = async () => {
     try {
-      const res = await axios.delete(
-        `${API_BASE}/api/${API_PATH}/carts`
-      );
+      const res = await axios.delete(`${API_BASE}/api/${API_PATH}/carts`);
       setCart(res.data.data);
       toast.success("購物車已清空");
     } catch (error) {
@@ -190,7 +184,7 @@ function Checkout() {
     try {
       const res = await axios.post(
         `${API_BASE}/api/${API_PATH}/order`,
-        payload
+        payload,
       );
 
       if (res.data.success) {
@@ -213,9 +207,7 @@ function Checkout() {
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">
-                  產品名稱：{product?.title}
-                </h5>
+                <h5 className="modal-title">產品名稱：{product?.title}</h5>
                 <button
                   type="button"
                   className="btn-close"
@@ -235,15 +227,18 @@ function Checkout() {
                     <p>產品描述：{product.description}</p>
                     <p>
                       價錢：
-                      <del>原價 ${product.origin_price}</del>，特價：
-                      ${product.price}
+                      <del>原價 ${product.origin_price}</del>，特價： $
+                      {product.price}
                     </p>
 
                     <div className="d-flex align-items-center mt-3">
                       <label style={{ width: "80px" }} className="me-2">
                         數量：
                       </label>
-                      <div className="input-group" style={{ maxWidth: "220px" }}>
+                      <div
+                        className="input-group"
+                        style={{ maxWidth: "220px" }}
+                      >
                         <button
                           className="btn btn-outline-secondary"
                           type="button"
@@ -262,9 +257,7 @@ function Checkout() {
                           onChange={(e) => {
                             const value = Number(e.target.value);
                             if (!Number.isNaN(value)) {
-                              setModalQty(
-                                Math.min(10, Math.max(1, value))
-                              );
+                              setModalQty(Math.min(10, Math.max(1, value)));
                             }
                           }}
                         />
@@ -427,7 +420,7 @@ function Checkout() {
                         updateCart(
                           cartItem.id,
                           cartItem.product.id,
-                          Number(e.target.value)
+                          Number(e.target.value),
                         )
                       }
                     />
@@ -464,9 +457,7 @@ function Checkout() {
             <input
               id="email"
               type="email"
-              className={`form-control ${
-                errors.email ? "is-invalid" : ""
-              }`}
+              className={`form-control ${errors.email ? "is-invalid" : ""}`}
               placeholder="請輸入 Email"
               {...register("email", {
                 required: "請輸入 Email",
@@ -477,9 +468,7 @@ function Checkout() {
               })}
             />
             {errors.email && (
-              <div className="invalid-feedback">
-                {errors.email.message}
-              </div>
+              <div className="invalid-feedback">{errors.email.message}</div>
             )}
           </div>
 
@@ -490,9 +479,7 @@ function Checkout() {
             <input
               id="name"
               type="text"
-              className={`form-control ${
-                errors.name ? "is-invalid" : ""
-              }`}
+              className={`form-control ${errors.name ? "is-invalid" : ""}`}
               placeholder="請輸入姓名"
               {...register("name", {
                 required: "請輸入姓名",
@@ -503,9 +490,7 @@ function Checkout() {
               })}
             />
             {errors.name && (
-              <div className="invalid-feedback">
-                {errors.name.message}
-              </div>
+              <div className="invalid-feedback">{errors.name.message}</div>
             )}
           </div>
 
@@ -516,9 +501,7 @@ function Checkout() {
             <input
               id="tel"
               type="tel"
-              className={`form-control ${
-                errors.tel ? "is-invalid" : ""
-              }`}
+              className={`form-control ${errors.tel ? "is-invalid" : ""}`}
               placeholder="請輸入電話"
               {...register("tel", {
                 required: "請輸入電話",
@@ -533,9 +516,7 @@ function Checkout() {
               })}
             />
             {errors.tel && (
-              <div className="invalid-feedback">
-                {errors.tel.message}
-              </div>
+              <div className="invalid-feedback">{errors.tel.message}</div>
             )}
           </div>
 
@@ -546,18 +527,14 @@ function Checkout() {
             <input
               id="address"
               type="text"
-              className={`form-control ${
-                errors.address ? "is-invalid" : ""
-              }`}
+              className={`form-control ${errors.address ? "is-invalid" : ""}`}
               placeholder="請輸入地址"
               {...register("address", {
                 required: "請輸入地址",
               })}
             />
             {errors.address && (
-              <div className="invalid-feedback">
-                {errors.address.message}
-              </div>
+              <div className="invalid-feedback">{errors.address.message}</div>
             )}
           </div>
 
