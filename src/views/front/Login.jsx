@@ -2,6 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import "../../assets/style.css";
 import { useForm } from "react-hook-form";
+import { useNavigate } from "react-router";
 
 // API 設定
 const API_BASE = import.meta.env.VITE_API_BASE;
@@ -12,6 +13,8 @@ function Login() {
   const [isAuth, setIsAuth] = useState(false);
   const [products, setProducts] = useState([]);
   const [tempProduct, setTempProduct] = useState(null);
+
+  const navigate = useNavigate();
 
   // react-hook-form 設定
   const {
@@ -30,7 +33,7 @@ function Login() {
   const getProducts = async () => {
     try {
       const response = await axios.get(
-        `${API_BASE}/api/${API_PATH}/admin/products`
+        `${API_BASE}/api/${API_PATH}/admin/products`,
       );
       console.log("產品資料：", response.data);
       setProducts(response.data.products);
@@ -43,18 +46,16 @@ function Login() {
   const onSubmit = async (data) => {
     try {
       // data = { username: "...", password: "..." }
-      const response = await axios.post(
-        `${API_BASE}/admin/signin`,
-        data
-      );
+      const response = await axios.post(`${API_BASE}/admin/signin`, data);
       const { token, expired } = response.data;
       // 寫入 cookie
       document.cookie = `hexToken=${token};expires=${new Date(expired)};`;
       // 設定 axios 預設 header
       axios.defaults.headers.common["Authorization"] = token;
+      navigate("/admin/product");
       // 拿產品
-      await getProducts();
-      setIsAuth(true);
+      // await getProducts();
+      // setIsAuth(true);
     } catch (error) {
       console.error("登入失敗:", error);
       setIsAuth(false);
@@ -85,20 +86,17 @@ function Login() {
   };
 
   const handleDeleteProduct = async (id) => {
-  const confirmDelete = window.confirm("確定要刪除這個產品嗎？");
-  if (!confirmDelete) return;
+    const confirmDelete = window.confirm("確定要刪除這個產品嗎？");
+    if (!confirmDelete) return;
 
-  try {
-    await axios.delete(
-      `${API_BASE}/api/${API_PATH}/admin/product/${id}`
-    );
-    // 刪掉後重新抓產品列表，或直接從 state 移除
-    await getProducts();
-  } catch (error) {
-    console.error("刪除產品失敗：", error);
-  }
-};
-
+    try {
+      await axios.delete(`${API_BASE}/api/${API_PATH}/admin/product/${id}`);
+      // 刪掉後重新抓產品列表，或直接從 state 移除
+      await getProducts();
+    } catch (error) {
+      console.error("刪除產品失敗：", error);
+    }
+  };
 
   return (
     <>
@@ -145,10 +143,7 @@ function Login() {
               )}
             </div>
 
-            <button
-              type="submit"
-              className="btn btn-info w-100 mt-2 p-3"
-            >
+            <button type="submit" className="btn btn-info w-100 mt-2 p-3">
               登入
             </button>
           </form>
@@ -167,95 +162,99 @@ function Login() {
               <h1>產品列表</h1>
               <table className="table">
                 <thead>
-                <tr>
-                  <th scope="col">產品名稱</th>
-                  <th scope="col">原價</th>
-                  <th scope="col">售價</th>
-                  <th scope="col">是否啟用</th>
-                  <th scope="col">查看詳情</th>
-                  <th scope="col">刪除</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product) => {
-                  return (
-                    <tr key={product.id}>
-                      <th scope="row">{product.title}</th>
-                      <td>{product.origin_price}</td>
-                      <td>{product.price}</td>
-                      <td>{product.is_enabled ? "啟用" : "不啟用"}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={() => setTempProduct(product)}
-                        >
-                          查看細節
-                        </button>
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-outline-danger"
-                          onClick={() => handleDeleteProduct(product.id)}
-                        >
-                          刪除
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-
+                  <tr>
+                    <th scope="col">產品名稱</th>
+                    <th scope="col">原價</th>
+                    <th scope="col">售價</th>
+                    <th scope="col">是否啟用</th>
+                    <th scope="col">查看詳情</th>
+                    <th scope="col">刪除</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((product) => {
+                    return (
+                      <tr key={product.id}>
+                        <th scope="row">{product.title}</th>
+                        <td>{product.origin_price}</td>
+                        <td>{product.price}</td>
+                        <td>{product.is_enabled ? "啟用" : "不啟用"}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => setTempProduct(product)}
+                          >
+                            查看細節
+                          </button>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger"
+                            onClick={() => handleDeleteProduct(product.id)}
+                          >
+                            刪除
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
               </table>
             </div>
 
             <div className="col-md-6">
               <h1>單一產品詳情</h1>
-              {tempProduct ? (
-                <div className="card">
+
+              <div className="card">
+                {tempProduct.imageUrl && (
                   <img
                     src={tempProduct.imageUrl}
                     className="card-img-top primary-image"
                     alt="主圖"
                   />
-                  <div className="card-body">
-                    <h3 className="card-title">{tempProduct.title}</h3>
+                )}
+
+                <div className="card-body">
+                  <h3 className="card-title">{tempProduct.title}</h3>
+
+                  <p className="card-text">
+                    <span className="fw-bold">商品描述: </span>
+                    {tempProduct.description}
+                  </p>
+
+                  <p className="card-text">
+                    <span className="fw-bold">商品內容: </span>
+                    {tempProduct.content}
+                  </p>
+
+                  <div className="d-flex">
                     <p className="card-text">
-                      <span className="fw-bold">商品描述: </span>
-                      {tempProduct.description}
+                      <span className="fw-bold">售價: </span>
+                      <del className="text-secondary">
+                        {tempProduct.origin_price}元
+                      </del>
+                      / {tempProduct.price}元
                     </p>
-                    <p className="card-text">
-                      <span className="fw-bold">商品內容: </span>
-                      {tempProduct.content}
-                    </p>
-                    <div className="d-flex">
-                      <p className="card-text">
-                        <span className="fw-bold">售價: </span>
-                        <del className="text-secondary">
-                          {tempProduct.origin_price}元
-                        </del>
-                        / {tempProduct.price}元
-                      </p>
-                    </div>
-                    <div className="d-flex">
-                      {Array.isArray(tempProduct.imagesUrl) &&
-                        tempProduct.imagesUrl.map((imgUrl, index) => {
-                          return (
-                            <img
-                              key={index}
-                              className="images"
-                              src={imgUrl}
-                              alt="附圖"
-                            />
-                          );
-                        })}
-                    </div>
+                  </div>
+
+                  <div className="d-flex">
+                    {/* 多張附圖：過濾掉空值，避免 src="" */}
+                    {Array.isArray(tempProduct.imagesUrl) &&
+                      tempProduct.imagesUrl
+                        .filter((imgUrl) => imgUrl) // 過濾空字串/null/undefined
+                        .map((imgUrl, index) => (
+                          <img
+                            key={index}
+                            className="images"
+                            src={imgUrl}
+                            alt="附圖"
+                          />
+                        ))}
                   </div>
                 </div>
-              ) : (
-                <p>請選擇一項商品查看</p>
-              )}
+              </div>
             </div>
           </div>
         </div>
